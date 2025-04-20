@@ -1,4 +1,4 @@
-module crow
+module github.com/go-jcklk/crow
 
 go 1.24.2
 
