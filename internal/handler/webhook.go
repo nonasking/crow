@@ -1,42 +1,36 @@
 package handler
 
 import (
-    "net/http"
+	"log"
+	"net/http"
 
-    "github.com/gin-gonic/gin"
-    "github.com/go-jcklk/crow/internal/model"
-    "github.com/go-jcklk/crow/internal/notion"
-
-    "fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/go-jcklk/crow/internal/notion"
+	"github.com/go-jcklk/crow/internal/parser"
 )
 
-type WebhookHandler struct {
-    NotionClient *notion.NotionClient
-}
+func WebhookHandler(notionClient *notion.NotionClient) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body struct {
+			Message string `json:"message"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+			return
+		}
 
-func NewWebhookHandler(nc *notion.NotionClient) *WebhookHandler {
-    return &WebhookHandler{
-        NotionClient: nc,
-    }
-}
+		amount, place, cardCompany, err := parser.ParseWebhookAuto(body.Message)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "메시지 파싱 실패: " + err.Error()})
+			return
+		}
 
-func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
-    var payload model.WebhookPayload
+		if err := notionClient.CreateCardRecord(amount, place, cardCompany); err != nil {
+			log.Println("Notion 업로드 실패:", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Notion 업로드 실패"})
+			return
+		}
 
-    fmt.Println(payload)
-
-// 웹훅 -> 노션 업로드
-
-//     if err := c.ShouldBindJSON(&payload); err != nil {
-//         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
-//         return
-//     }
-
-//     err := h.NotionClient.CreatePage(payload.Title, payload.Message)
-//     if err != nil {
-//         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Notion page"})
-//         return
-//     }
-
-    c.JSON(http.StatusOK, gin.H{"status": "success"})
+		c.JSON(http.StatusOK, gin.H{"status": "success"})
+	}
 }
