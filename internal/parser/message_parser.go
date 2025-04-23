@@ -43,7 +43,7 @@ func parseShinhanCard(msg string) (int, string, string, error) {
 		location = strings.TrimSpace(location[:idx])
 	}
 
-	return amount, location, "신한카드", nil
+	return amount, location, "신한Big카드", nil
 }
 
 // 우리카드 파싱
@@ -59,7 +59,7 @@ func parseWooriCard(msg string) (int, string, string, error) {
 	}
 	location := strings.TrimSpace(lines[len(lines)-1])
 
-	return amount, location, "우리카드", nil
+	return amount, location, "우리은행통장", nil
 }
 
 // 카드사 자동 감지 파싱
