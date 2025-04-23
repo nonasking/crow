@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-jcklk/crow/internal/notion"
 	"github.com/go-jcklk/crow/internal/parser"
+	"github.com/go-jcklk/crow/internal/constants"
 )
 
 type WebhookHandler struct {
@@ -24,19 +25,19 @@ func (h *WebhookHandler) handle(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": constants.ErrMsgInvalidJSON})
 		return
 	}
 
 	amount, place, cardCompany, err := parser.ParseWebhookAuto(body.Message)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "메시지 파싱 실패: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": constants.ErrMsgParseFailed + err.Error()})
 		return
 	}
 
 	if err := h.notionClient.CreateCardRecord(amount, place, cardCompany); err != nil {
-		log.Println("Notion 업로드 실패:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Notion 업로드 실패"})
+		log.Println(constants.ErrMsgNotionFailed, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": constants.ErrMsgNotionFailed})
 		return
 	}
 
