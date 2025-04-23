@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/go-jcklk/crow/internal/config"
+	"github.com/go-jcklk/crow/internal/constants"
 )
 
 type NotionClient struct {
@@ -37,7 +38,7 @@ func (n *NotionClient) CreateCardRecord(amount int, place, cardCompany string) e
 				},
 			},
 			"소분류": map[string]interface{}{
-				"select": map[string]interface{}{"name": "미정산"},
+				"select": map[string]interface{}{"name": constants.NotionDefaultSubCategory},
 			},
 			"결제방식": map[string]interface{}{
 				"select": map[string]interface{}{"name": cardCompany},
@@ -48,11 +49,11 @@ func (n *NotionClient) CreateCardRecord(amount int, place, cardCompany string) e
 			"수입": map[string]interface{}{"number": 0},
 			"지출": map[string]interface{}{"number": amount},
 			"대분류": map[string]interface{}{
-				"select": map[string]interface{}{"name": "기타"},
+				"select": map[string]interface{}{"name": constants.NotionDefaultCategory},
 			},
 			"비고": map[string]interface{}{
 				"rich_text": []map[string]interface{}{
-					{"text": map[string]interface{}{"content": "비고"}},
+					{"text": map[string]interface{}{"content": constants.NotionDefaultMemo}},
 				},
 			},
 		},
