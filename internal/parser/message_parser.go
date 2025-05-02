@@ -75,9 +75,9 @@ func parseWooriCard(msg string) (int, string, string, error) {
 // 카드사 자동 감지 파싱
 func ParseWebhookAuto(msg string) (int, string, string, error) {
 	switch {
-	case strings.Contains(msg, "신한카드"):
+	case strings.Contains(msg, "[Web발신]\n신한카드"):
 		return parseShinhanCard(msg)
-	case strings.Contains(msg, "우리카드"):
+	case strings.Contains(msg, "[Web발신]\n우리"):
 		return parseWooriCard(msg)
 	default:
 		return 0, "", "", errors.New(constants.ErrUnsupportedCardCompany)
