@@ -45,17 +45,30 @@ func parseShinhanCard(msg string) (int, string, string, error) {
 
 // 우리카드 파싱
 func parseWooriCard(msg string) (int, string, string, error) {
-	amount, _, err := extractAmount(msg, `(?m)^([\d,]+)원`)
+	if !strings.Contains(msg, "출금") {
+		return 0, "", "", errors.New(constants.ErrInvalidCardMessageFormat)
+	}
+
+	// 출금 금액 추출 (출금이라는 단어와 함께 있는 줄에서 추출)
+	re := regexp.MustCompile(`출금\s*([\d,]+)원`)
+	match := re.FindStringSubmatch(msg)
+	if len(match) < 2 {
+		return 0, "", "", errors.New(constants.ErrInvalidCardMessageFormat)
+	}
+
+	amountStr := strings.ReplaceAll(match[1], ",", "")
+	amount, err := strconv.Atoi(amountStr)
 	if err != nil {
 		return 0, "", "", err
 	}
 
+	// 장소는 보통 마지막 줄 (잔액 제외한 줄) 혹은 출금 줄 다음 줄
 	lines := strings.Split(strings.TrimSpace(msg), "\n")
-	if len(lines) == 0 {
+	if len(lines) < 5 {
 		return 0, "", "", errors.New(constants.ErrInvalidCardMessageFormat)
 	}
-	location := strings.TrimSpace(lines[len(lines)-1])
 
+	location := strings.TrimSpace(lines[4])
 	return amount, location, constants.CardCompanyWoori, nil
 }
 
