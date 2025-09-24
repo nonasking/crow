@@ -29,17 +29,17 @@ func (h *WebhookHandler) handle(c *gin.Context) {
 		return
 	}
 
-	amount, place, cardCompany, err := parser.ParseWebhookAuto(body.Message)
+	amount, place, cardCompany, paymentDate, err := parser.ParseWebhookAuto(body.Message)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": constants.ErrMsgParseFailed + err.Error()})
 		return
 	}
 
-	if err := h.notionClient.CreateCardRecord(amount, place, cardCompany); err != nil {
-		log.Println(constants.ErrMsgNotionFailed, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": constants.ErrMsgNotionFailed})
-		return
-	}
+    if err := h.notionClient.CreateCardRecord(amount, place, cardCompany, paymentDate); err != nil {
+        log.Println(constants.ErrMsgNotionFailed, err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": constants.ErrMsgNotionFailed})
+        return
+    }
 
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
