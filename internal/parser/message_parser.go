@@ -86,27 +86,23 @@ func parseShinhanCard(msg string) (int, string, string, string, error) {
 // 우리카드 파싱 (결제일 추가)
 func parseWooriCard(msg string) (int, string, string, string, error) {
     paymentDate := extractPaymentDate(msg)
-
     // 금액 추출 (원 단위로 된 숫자 찾기)
     re := regexp.MustCompile(`([\d,]+)원`)
     match := re.FindStringSubmatch(msg)
     if len(match) < 2 {
        return 0, "", "", "", errors.New(constants.ErrInvalidCardMessageFormat)
     }
-
     amountStr := strings.ReplaceAll(match[1], ",", "")
     amount, err := strconv.Atoi(amountStr)
     if err != nil {
        return 0, "", "", "", err
     }
-
-    // 장소는 보통 마지막 줄
+    // 장소는 마지막 줄의 전 줄
     lines := strings.Split(strings.TrimSpace(msg), "\n")
     if len(lines) < 5 {
        return 0, "", "", "", errors.New(constants.ErrInvalidCardMessageFormat)
     }
-
-    location := strings.TrimSpace(lines[len(lines)-1])
+    location := strings.TrimSpace(lines[len(lines)-2])
     return amount, location, constants.CardCompanyWoori, paymentDate, nil
 }
 
