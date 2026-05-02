@@ -1,160 +1,91 @@
 # crow
 
-A lightweight Go webhook server that automatically parses Korean card transaction messages and logs them to a Notion database.
+A webhook server that parses card payment SMS and auto-logs them to a Notion budget tracker.
 
-## Overview
+[![CI](https://github.com/nonasking/crow/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/nonasking/crow/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/nonasking/crow/branch/develop/graph/badge.svg)](https://codecov.io/gh/nonasking/crow)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/nonasking/crow)](go.mod)
 
-Crow receives SMS/web notification messages from Korean banks (Shinhan Card, Woori Bank) via a webhook, extracts transaction details using regex-based parsing, and creates expense records in a Notion database — eliminating manual expense tracking.
+## Why
 
+Manually adding each card transaction to my Notion budget page got old fast. The payment SMS already carries everything I need — amount, merchant, date — so the natural move is to parse it on arrival and write it straight to Notion.
+
+An SMS forwarder app on my phone POSTs the message to this server. A regex parser dispatches on issuer, extracts the fields, and creates a page via the Notion API. 30~40 manual entries per month, gone.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    SMS[Card payment SMS] --> FWD[SMS forwarder app]
+    FWD -- "POST /webhook" --> GIN[Gin server]
+    GIN --> P{ParseWebhookAuto<br/>issuer detection}
+    P -->|Shinhan| PS[parseShinhanCard]
+    P -->|Woori| PW[parseWooriCard]
+    PS --> N[Notion API]
+    PW --> N
+    N --> DB[(Notion DB<br/>budget tracker)]
 ```
-Card notification → POST /webhook → Parse → Notion DB record
-```
 
-## Features
+Three layers, separated by intent:
 
-- Auto-detects card type from raw notification text
-- Supports multiple Shinhan Card message formats
-- Supports Woori Bank notification format
-- Extracts amount, merchant, payment method, and date
-- Creates structured records in Notion with mapped properties
+- `internal/parser` — issuer-specific SMS parsers. Pure functions, no external dependencies.
+- `internal/notion` — Notion API client. Maps parsed fields to page properties and POSTs.
+- `internal/handler` — Gin handler. Wires the two together.
 
-## Requirements
+The handler stays thin so the parser can be unit-tested in isolation.
 
-- Go 1.24+
-- A [Notion integration](https://www.notion.so/my-integrations) with write access to your database
-- A Notion database with the properties described below
-
-## Installation
+## Quick start
 
 ```bash
-git clone https://github.com/go-jcklk/crow.git
-cd crow
-go mod download
+cp .env.example .env
+# fill in NOTION_TOKEN, NOTION_DATABASE_ID, NOTION_VERSION
+
+go run ./cmd/server
 ```
 
-## Configuration
+Defaults to port `8080`. Override with `PORT`.
 
-Create a `.env` file in the project root:
-
-```env
-NOTION_TOKEN=secret_xxxxxxxxxxxxxxxxxxxx
-NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-NOTION_VERSION=2022-06-28
-PORT=8080  # optional, defaults to 8080
-```
-
-| Variable             | Description                          | Required |
-|----------------------|--------------------------------------|----------|
-| `NOTION_TOKEN`       | Notion integration secret token      | Yes      |
-| `NOTION_DATABASE_ID` | Target Notion database ID            | Yes      |
-| `NOTION_VERSION`     | Notion API version                   | Yes      |
-| `PORT`               | Server port (default: `8080`)        | No       |
-
-## Running
+Request shape:
 
 ```bash
-# Development
-go run ./cmd/server/main.go
-
-# Build and run
-go build -o crow ./cmd/server
-./crow
+curl -X POST http://localhost:8080/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"message": "[Web발신]\n1차 민생회복 신한(4557)승인 강*성 16,980원 08/24 17:50 땀땀 잔액 0원"}'
 ```
 
-## API
+## Adding a new card issuer
 
-### `POST /webhook`
+Three places to touch:
 
-Receives a raw card notification message and creates a Notion record.
+1. Add `parseXxxCard(msg) (...)` in `internal/parser/message_parser.go`
+2. Add a switch arm to `ParseWebhookAuto`
+3. Add fixture cases to `internal/parser/message_parser_test.go`
 
-**Request**
+The handler and Notion client stay untouched by design.
 
-```json
-{
-  "message": "<raw card notification text>"
-}
-```
+## Tradeoffs
 
-**Response — success**
+- **Regex-based parser** — breaks if an issuer changes their SMS format (Shinhan did once, which is why there are dual old/new format branches). Mitigated by accumulating real SMS samples as fixtures in `*_test.go`. CI goes red before production does.
+- **Notion as the data store** — zero infra cost. In exchange, throughput is bounded by Notion's rate limit (~3 req/sec average), so concurrent bursts are a non-goal. Fine for personal use.
+- **Render free tier deploy** — 5~10s cold start. Hidden inside the natural delay between swiping a card and the SMS arriving, so it's not noticeable.
 
-```json
-{ "status": "success" }
-```
-
-**Response — error**
-
-```json
-{ "error": "<error description>" }
-```
-
-| Status | Meaning                                      |
-|--------|----------------------------------------------|
-| 200    | Record created successfully                  |
-| 400    | Invalid JSON or unsupported message format   |
-| 500    | Notion API error                             |
-
-## Supported Message Formats
-
-### Shinhan Card (Format 1)
+## Layout
 
 ```
-[Web발신]
-신한카드(4557)승인 강*성 2,400원(일시불)04/20 16:56 세븐일레븐영 누적1,427,265원
+cmd/server/        # entry point
+internal/
+  config/          # .env loading and validation
+  constants/       # issuer names, error messages
+  handler/         # /webhook handler
+  notion/          # Notion API client
+  parser/          # issuer-dispatching SMS parser + tests
+.github/workflows/ # CI
 ```
 
-### Shinhan Card (Format 2)
+## Testing
 
-```
-1차 민생회복 신한(4557)승인 강*성 16,980원 08/24 17:50 땀땀 잔액 0원
-```
-
-### Woori Bank
-
-```
-[Web발신]
-우리은행통장에서
-출금되었습니다
-12,000원
-04/21 14:30
-스타벅스
+```bash
+go test ./... -cover
 ```
 
-## Notion Database Schema
-
-The following properties must exist in your Notion database:
-
-| Property   | Type   | Description                       |
-|------------|--------|-----------------------------------|
-| `항목`     | Title  | Merchant name                     |
-| `소분류`   | Select | Sub-category (default: `미정산`)  |
-| `결제방식` | Select | Payment method (card company)     |
-| `날짜`     | Date   | Transaction date (`YYYY-MM-DD`)   |
-| `수입`     | Number | Income amount (default: `0`)      |
-| `지출`     | Number | Expense amount                    |
-| `대분류`   | Select | Main category (default: `미정산`) |
-| `비고`     | Text   | Notes (default: empty)            |
-
-## Project Structure
-
-```
-crow/
-├── cmd/server/
-│   └── main.go               # Entry point
-├── internal/
-│   ├── config/
-│   │   └── config.go         # Environment variable loading
-│   ├── constants/
-│   │   └── constants.go      # Card names, error messages
-│   ├── handler/
-│   │   └── webhook.go        # HTTP handler
-│   ├── notion/
-│   │   └── client.go         # Notion API client
-│   └── parser/
-│       └── message_parser.go # Card message parsing
-├── go.mod
-└── go.sum
-```
-
-## License
-
-MIT
+Core business logic (the parser) is covered by table-driven tests over real SMS fixtures — happy path and error cases per issuer.
