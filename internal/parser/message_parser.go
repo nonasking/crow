@@ -13,6 +13,11 @@ import (
 // 취소 문자도 승인과 같은 형식이라 그대로 파싱하면 환불이 지출로 한 번 더 기록된다.
 var ErrCancelledPayment = errors.New(constants.ErrCancelledPayment)
 
+// 승인취소 판별: "승인취소" 또는 카드번호 괄호 바로 뒤의 "취소".
+// 문자 전체에서 "취소"를 찾으면 가맹점명("취소불가상점")이나 적요("예약취소수수료")에
+// 걸려 정상 지출이 기록되지 않는다.
+var cancellationPattern = regexp.MustCompile(`승인\s*취소|\(\d+\)\s*취소`)
+
 // 신한 신 포맷 가맹점: "HH:MM" 뒤부터 "잔액" 앞(또는 끝)까지.
 // [^잔액] 문자 클래스로 쓰면 '잔'·'액' 글자 하나하나를 제외해서
 // "잔치국수"가 빈 문자열, "카페액자"가 "카페"로 잘린다.
@@ -120,7 +125,7 @@ func parseWooriCard(msg string) (int, string, string, string, error) {
 
 // 카드사 자동 감지 파싱 (결제일 포함)
 func ParseWebhookAuto(msg string) (int, string, string, string, error) {
-    if strings.Contains(msg, "취소") {
+    if cancellationPattern.MatchString(msg) {
        return 0, "", "", "", ErrCancelledPayment
     }
     switch {

@@ -122,6 +122,19 @@ func TestParseWebhookAuto(t *testing.T) {
 			wantErrMsg: constants.ErrCancelledPayment,
 		},
 		{
+			name:       "신한 괄호 뒤 취소도 기록 대상이 아니다",
+			msg:        "[Web발신]\n신한(4557)취소 강*성 5,000원 01/02 09:10 김밥천국 잔액 5,000원",
+			wantErrMsg: constants.ErrCancelledPayment,
+		},
+		{
+			name:        "가맹점명에 '취소'가 들어간 정상 승인은 기록한다",
+			msg:         "[Web발신]\n신한(4557)승인 강*성 5,000원 01/02 09:10 취소불가상점 잔액 0원",
+			wantAmount:  5000,
+			wantPlace:   "취소불가상점",
+			wantCompany: constants.CardCompanyShinhan,
+			wantDate:    "01/02",
+		},
+		{
 			name:       "신한 — 금액 누락",
 			msg:        "[Web발신]\n신한카드(4557)승인 강*성",
 			wantErrMsg: constants.ErrInvalidCardMessageFormat,
