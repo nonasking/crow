@@ -102,13 +102,13 @@ internal/
 go test ./... -cover
 ```
 
-**6 test functions, 36 table-driven cases.**
+**8 test functions, 48 cases.**
 
 | Package | Cases | What it covers |
 |---|---|---|
-| `internal/handler` | 13 | Success per issuer (parsed fields reach the recorder), bad JSON / wrong field type / missing `message`, unparseable SMS, Notion failure → 500. `CardRecorder` is faked, so no network. |
-| `internal/parser` | 19 | Both issuers over real SMS fixtures — Shinhan old (`일시불` / `할부`) and new formats, Woori line layout, plus malformed input: missing amount, too few lines, unsupported issuer, empty message. |
-| `internal/notion` | 5 | `MM/DD` → `YYYY-MM-DD` date coercion and its fallbacks. |
+| `internal/handler` | 14 | Success per issuer (parsed fields reach the recorder), bad JSON / wrong field type / missing `message`, unparseable SMS, Notion failure → 500, cancellation SMS → 200 `ignored` with nothing recorded. `CardRecorder` is faked, so no network. |
+| `internal/parser` | 19 | Both issuers over real SMS fixtures — Shinhan old (`일시불` / `할부`) and new formats, Woori line layout, merchant names containing 잔/액, cancellation SMS, plus malformed input: missing merchant, missing amount, too few lines, unsupported issuer, empty message. |
+| `internal/notion` | 11 | `MM/DD` → `YYYY-MM-DD` in KST: future dates roll back a year, the KST new-year early-morning case, impossible dates (`13/45`, `02/29` in a non-leap year) and malformed input fall back to today. |
 
 Coverage: `internal/handler` 100%, `internal/parser` 92%.
 

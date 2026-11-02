@@ -9,6 +9,15 @@ import (
     "github.com/go-jcklk/crow/internal/constants"
 )
 
+// ErrCancelledPayment는 승인취소 문자를 받았을 때 반환된다.
+// 취소 문자도 승인과 같은 형식이라 그대로 파싱하면 환불이 지출로 한 번 더 기록된다.
+var ErrCancelledPayment = errors.New(constants.ErrCancelledPayment)
+
+// 신한 신 포맷 가맹점: "HH:MM" 뒤부터 "잔액" 앞(또는 끝)까지.
+// [^잔액] 문자 클래스로 쓰면 '잔'·'액' 글자 하나하나를 제외해서
+// "잔치국수"가 빈 문자열, "카페액자"가 "카페"로 잘린다.
+var shinhanNewLocationPattern = regexp.MustCompile(`\d{2}:\d{2}\s+(.+?)\s*(?:잔액|$)`)
+
 // 공통 금액 추출 함수
 func extractAmount(msg string, pattern string) (int, string, error) {
     re := regexp.MustCompile(pattern)
@@ -70,11 +79,14 @@ func parseShinhanCard(msg string) (int, string, string, string, error) {
         }
 
         // 장소 추출: 시간 이후부터 "잔액" 전까지
-        locationPattern := regexp.MustCompile(`\d{2}:\d{2}\s+([^잔액]+)`)
-        locationMatch := locationPattern.FindStringSubmatch(msg)
+        locationMatch := shinhanNewLocationPattern.FindStringSubmatch(strings.TrimSpace(msg))
         var location string
         if len(locationMatch) > 1 {
             location = strings.TrimSpace(locationMatch[1])
+        }
+        // 가맹점명 없이 바로 "잔액"이 오면 정규식이 "잔액…"을 통째로 잡는다.
+        if location == "" || strings.HasPrefix(location, "잔액") {
+            return 0, "", "", "", errors.New(constants.ErrInvalidCardMessageFormat)
         }
 
         return amount, location, constants.CardCompanyShinhan, paymentDate, nil
@@ -108,6 +120,9 @@ func parseWooriCard(msg string) (int, string, string, string, error) {
 
 // 카드사 자동 감지 파싱 (결제일 포함)
 func ParseWebhookAuto(msg string) (int, string, string, string, error) {
+    if strings.Contains(msg, "취소") {
+       return 0, "", "", "", ErrCancelledPayment
+    }
     switch {
     case strings.Contains(msg, "[Web발신]\n신한카드") || strings.Contains(msg, "신한("):
        return parseShinhanCard(msg)

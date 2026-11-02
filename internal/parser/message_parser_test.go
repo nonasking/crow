@@ -96,6 +96,32 @@ func TestParseWebhookAuto(t *testing.T) {
 			wantDate:    "01/02",
 		},
 		{
+			name:        "신한 신 포맷 — 가맹점명에 '잔'이 들어가도 잘리지 않는다",
+			msg:         "[Web발신]\n신한(4557)승인 강*성 9,000원 05/05 12:00 잔치국수 잔액 1,000원",
+			wantAmount:  9000,
+			wantPlace:   "잔치국수",
+			wantCompany: constants.CardCompanyShinhan,
+			wantDate:    "05/05",
+		},
+		{
+			name:        "신한 신 포맷 — 가맹점명에 '액'이 들어가도 잘리지 않는다",
+			msg:         "[Web발신]\n신한(4557)승인 강*성 15,000원 05/06 13:00 카페액자 잔액 1,000원",
+			wantAmount:  15000,
+			wantPlace:   "카페액자",
+			wantCompany: constants.CardCompanyShinhan,
+			wantDate:    "05/06",
+		},
+		{
+			name:       "신한 신 포맷 — 가맹점명 없이 바로 잔액",
+			msg:        "[Web발신]\n신한(4557)승인 강*성 5,000원 01/02 09:10 잔액 0원",
+			wantErrMsg: constants.ErrInvalidCardMessageFormat,
+		},
+		{
+			name:       "신한 승인취소는 기록 대상이 아니다",
+			msg:        "[Web발신]\n신한카드(4557)승인취소 강*성 2,400원(일시불)04/20 16:56 세븐일레븐영 누적1,424,865원",
+			wantErrMsg: constants.ErrCancelledPayment,
+		},
+		{
 			name:       "신한 — 금액 누락",
 			msg:        "[Web발신]\n신한카드(4557)승인 강*성",
 			wantErrMsg: constants.ErrInvalidCardMessageFormat,

@@ -231,3 +231,20 @@ func TestWebhookHandler_NoRecordOnFailure(t *testing.T) {
 		t.Errorf("실패 페이로드에서 recorder 가 %d 회 호출됨 (0이어야 함)", rec.calls)
 	}
 }
+
+func TestWebhookHandler_CancellationIgnored(t *testing.T) {
+	rec := &fakeRecorder{}
+	r := setupRouter(rec)
+
+	w := postRaw(r, `{"message": "[Web발신]\n신한카드(4557)승인취소 강*성 2,400원(일시불)04/20 16:56 세븐일레븐영 누적1,424,865원"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", w.Code, http.StatusOK)
+	}
+	if !strings.Contains(w.Body.String(), `"ignored"`) {
+		t.Errorf("body: got %s, want status=ignored", w.Body.String())
+	}
+	if rec.calls != 0 {
+		t.Errorf("승인취소는 기록하지 않아야 한다 (calls=%d)", rec.calls)
+	}
+}
