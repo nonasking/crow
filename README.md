@@ -2,6 +2,8 @@
 
 A webhook server that parses card payment SMS and auto-logs them to a Notion budget tracker.
 
+> **Retired.** This server is no longer deployed. Its job (card SMS → Notion) is now done by [crow-backend](https://github.com/nonasking/crow-backend), which also stores every expense in PostgreSQL and serves the [crow-frontend](https://github.com/nonasking/crow-frontend) dashboard. The parser fixes here mirror the ones made there.
+
 [![CI](https://github.com/nonasking/crow/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/nonasking/crow/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/nonasking/crow/branch/develop/graph/badge.svg)](https://codecov.io/gh/nonasking/crow)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/nonasking/crow)](go.mod)
