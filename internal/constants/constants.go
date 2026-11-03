@@ -20,4 +20,5 @@ const (
 	ErrMsgNotionFailed  = "Notion 업로드 실패"
 	ErrInvalidCardMessageFormat = "메시지 형식이 잘못되었습니다"
 	ErrUnsupportedCardCompany = "지원하지 않는 카드사입니다"
+	ErrCancelledPayment = "승인취소 문자는 기록하지 않습니다"
 )
