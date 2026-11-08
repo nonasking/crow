@@ -2,6 +2,8 @@
 
 A webhook server that parses card payment SMS and auto-logs them to a Notion budget tracker.
 
+> **Retired.** This server is no longer deployed. Its job (card SMS → Notion) is now done by [crow-backend](https://github.com/nonasking/crow-backend), which also stores every expense in PostgreSQL and serves the [crow-frontend](https://github.com/nonasking/crow-frontend) dashboard. The parser fixes here mirror the ones made there.
+
 [![CI](https://github.com/nonasking/crow/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/nonasking/crow/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/nonasking/crow/branch/develop/graph/badge.svg)](https://codecov.io/gh/nonasking/crow)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/nonasking/crow)](go.mod)
@@ -17,13 +19,27 @@ An SMS forwarder app on my phone POSTs the message to this server. A regex parse
 ```mermaid
 flowchart LR
     SMS[Card payment SMS] --> FWD[SMS forwarder app]
-    FWD -- "POST /webhook" --> GIN[Gin server]
-    GIN --> P{ParseWebhookAuto<br/>issuer detection}
-    P -->|Shinhan| PS[parseShinhanCard]
-    P -->|Woori| PW[parseWooriCard]
-    PS --> N[Notion API]
-    PW --> N
-    N --> DB[(Notion DB<br/>budget tracker)]
+
+    subgraph crow["crow (Gin)"]
+        direction LR
+        H["handler<br/>POST /webhook"]
+        P{"parser<br/>ParseWebhookAuto"}
+        PS["parseShinhanCard<br/>old + new format"]
+        PW[parseWooriCard]
+        CR{{"CardRecorder<br/>(interface)"}}
+        NC["notion.Client<br/>CreateCardRecord"]
+
+        H -- "parse" --> P
+        P -->|Shinhan| PS
+        P -->|Woori| PW
+        PS -- "amount, place,<br/>issuer, date" --> H
+        PW -- "amount, place,<br/>issuer, date" --> H
+        H -- "record" --> CR
+        CR -.implemented by.-> NC
+    end
+
+    FWD -- "POST {message}" --> H
+    NC --> DB[(Notion DB<br/>budget tracker)]
 ```
 
 Three layers, separated by intent:
@@ -32,7 +48,7 @@ Three layers, separated by intent:
 - `internal/notion` — Notion API client. Maps parsed fields to page properties and POSTs.
 - `internal/handler` — Gin handler. Wires the two together.
 
-The handler stays thin so the parser can be unit-tested in isolation.
+The handler depends on the `CardRecorder` interface, not on the Notion client directly — so both the parser and the handler's error paths (bad JSON, unparseable SMS, Notion down) are unit-testable with a fake recorder and no network.
 
 ## Quick start
 
@@ -88,4 +104,19 @@ internal/
 go test ./... -cover
 ```
 
-Core business logic (the parser) is covered by table-driven tests over real SMS fixtures — happy path and error cases per issuer.
+**8 test functions, 50 cases.**
+
+| Package | Cases | What it covers |
+|---|---|---|
+| `internal/handler` | 14 | Success per issuer (parsed fields reach the recorder), bad JSON / wrong field type / missing `message`, unparseable SMS, Notion failure → 500, cancellation SMS → 200 `ignored` with nothing recorded. `CardRecorder` is faked, so no network. |
+| `internal/parser` | 25 | Both issuers over real SMS fixtures — Shinhan old (`일시불` / `할부`) and new formats, Woori line layout, merchant names containing 잔/액, cancellation SMS (without misfiring on a merchant named 취소…), plus malformed input: missing merchant, missing amount, too few lines, unsupported issuer, empty message. |
+| `internal/notion` | 11 | `MM/DD` → `YYYY-MM-DD` in KST: future dates roll back a year, the KST new-year early-morning case, impossible dates (`13/45`, `02/29` in a non-leap year) and malformed input fall back to today. |
+
+Coverage: `internal/handler` 100%, `internal/parser` 92%.
+
+Two invariants the tests pin down, because getting them wrong writes bad data to Notion:
+
+- **No record on failure** — if binding or parsing fails, `CardRecorder` is never called. Notion writes can't be undone.
+- **No partial results** — a parse error returns zero values, never a half-filled record.
+
+New SMS fixtures go in `internal/parser/message_parser_test.go`. When an issuer changes their format, that's the file that goes red first.

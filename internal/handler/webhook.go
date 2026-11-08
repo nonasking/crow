@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -34,6 +35,10 @@ func (h *WebhookHandler) handle(c *gin.Context) {
 	}
 
 	amount, place, cardCompany, paymentDate, err := parser.ParseWebhookAuto(body.Message)
+	if errors.Is(err, parser.ErrCancelledPayment) {
+		c.JSON(http.StatusOK, gin.H{"status": "ignored", "reason": err.Error()})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": constants.ErrMsgParseFailed + err.Error()})
 		return
